@@ -10,7 +10,6 @@ fn main() -> std::io::Result<()> {
     for thread in 0..10 {
         std::thread::spawn(move || {
             for i in 0..10 {
-                // println!("Thread {} says {}!", thread, i);
                 log::info!("Thread {} says {}!", thread, i);
             }
         });
