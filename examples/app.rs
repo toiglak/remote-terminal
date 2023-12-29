@@ -1,10 +1,11 @@
-use redirect::redirect_stdout_to_pipe;
+use remote_terminal::redirect_stdout_to_ip;
 
-mod redirect;
+pub const BROADCAST_AT: &str = "127.0.0.1:7227";
 
 fn main() -> std::io::Result<()> {
-    redirect_stdout_to_pipe()?;
+    redirect_stdout_to_ip(BROADCAST_AT)?;
 
+    std::env::set_var("RUST_LOG", "info");
     env_logger::init();
 
     for thread in 0..10 {

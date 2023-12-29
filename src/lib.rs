@@ -1,6 +1,5 @@
 use std::fs::File;
-use std::io::Error;
-use std::io::Write;
+use std::io::{Error, Write};
 use std::net::SocketAddr;
 use std::os::windows::io::{FromRawHandle, RawHandle};
 use std::ptr;
@@ -12,9 +11,12 @@ use winapi::um::namedpipeapi::CreatePipe;
 use winapi::um::processenv::SetStdHandle;
 use winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
 
-const BROADCAST_AT: &str = "127.0.0.1:7227";
+#[path = "../examples/remote_terminal.rs"]
+mod terminal_app;
+pub use terminal_app::remote_terminal;
 
-pub fn redirect_stdout_to_pipe() -> std::io::Result<()> {
+#[cfg(target_os = "windows")]
+pub fn redirect_stdout_to_ip(ip: &'static str) -> std::io::Result<()> {
     let mut read_handle: RawHandle = ptr::null_mut();
     let mut write_handle: RawHandle = ptr::null_mut();
 
@@ -42,7 +44,7 @@ pub fn redirect_stdout_to_pipe() -> std::io::Result<()> {
 
     // Spawn a thread to read from the pipe and send to a UDP destination.
     std::thread::spawn(move || {
-        broadcast_pipe_at(read_handle, BROADCAST_AT).unwrap();
+        broadcast_pipe_at(read_handle, ip).unwrap();
     });
 
     Ok(())
@@ -77,7 +79,7 @@ impl Broadcast {
         self.socket
             .send(packet)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        self.socket.manual_poll(std::time::Instant::now());
+        self.socket.manual_poll(std::time::Instant::now()); // important
         Ok(())
     }
 }
