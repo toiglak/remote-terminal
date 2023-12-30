@@ -1,18 +1,12 @@
-use std::io::BufReader;
-
-use laminar::{Socket, SocketEvent};
+use std::net::TcpListener;
 
 /// Use this function inside of your binary, for example `cargo run --bin remote_terminal`.
 pub fn remote_terminal(ip: &'static str) -> std::io::Result<()> {
-    let mut socket = Socket::bind(ip).unwrap();
-    let (_, receiver) = (socket.get_packet_sender(), socket.get_event_receiver());
-    let _thread = std::thread::spawn(move || socket.start_polling());
+    let stream = TcpListener::bind(ip).unwrap();
 
     loop {
-        if let Ok(SocketEvent::Packet(packet)) = receiver.recv() {
-            let msg = packet.payload();
-            std::io::copy(&mut BufReader::new(msg), &mut std::io::stdout())?;
-        }
+        let (mut socket, _) = stream.accept()?;
+        let _ = std::io::copy(&mut socket, &mut std::io::stdout());
     }
 }
 

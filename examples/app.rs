@@ -3,10 +3,10 @@ use remote_terminal::redirect_stdout_to_ip;
 pub const BROADCAST_AT: &str = "127.0.0.1:7227";
 
 fn main() -> std::io::Result<()> {
-    redirect_stdout_to_ip(BROADCAST_AT)?;
-
     std::env::set_var("RUST_LOG", "info");
     env_logger::init();
+
+    redirect_stdout_to_ip(BROADCAST_AT)?;
 
     for thread in 0..10 {
         std::thread::spawn(move || {

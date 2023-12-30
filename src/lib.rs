@@ -1,10 +1,8 @@
 use std::fs::File;
 use std::io::{Error, Write};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::os::windows::io::{FromRawHandle, RawHandle};
 use std::ptr;
-
-use laminar::{Packet, Socket};
 
 use winapi::ctypes::c_void;
 use winapi::um::namedpipeapi::CreatePipe;
@@ -52,7 +50,7 @@ pub fn redirect_stdout_to_ip(ip: &'static str) -> std::io::Result<()> {
 
 fn broadcast_pipe_at(read_handle: ReadHandle, destination: &str) -> std::io::Result<()> {
     let mut pipe = unsafe { File::from_raw_handle(read_handle.0) };
-    let mut broadcast = Broadcast::new(destination);
+    let mut broadcast = Broadcast::new(destination)?;
 
     // This runs "forever".
     std::io::copy(&mut pipe, &mut broadcast)?;
@@ -62,35 +60,52 @@ fn broadcast_pipe_at(read_handle: ReadHandle, destination: &str) -> std::io::Res
 }
 
 struct Broadcast {
-    socket: Socket,
     destination: SocketAddr,
+    stream: Option<TcpStream>,
 }
 
 impl Broadcast {
-    fn new(destination: &str) -> Self {
-        Self {
-            socket: Socket::bind("127.0.0.1:0").unwrap(),
-            destination: destination.parse().unwrap(),
-        }
+    fn new(destination: impl ToSocketAddrs) -> std::io::Result<Self> {
+        let destination = destination.to_socket_addrs()?.next().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "No valid address provided",
+            )
+        })?;
+        Ok(Self {
+            destination,
+            stream: None,
+        })
     }
 
-    fn send_packet(&mut self, data: impl Into<Vec<u8>>) -> std::io::Result<()> {
-        let packet = Packet::reliable_ordered(self.destination, data.into(), None);
-        self.socket
-            .send(packet)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        self.socket.manual_poll(std::time::Instant::now()); // important
-        Ok(())
+    fn connect_if_none(&mut self) {
+        if self.stream.is_none() {
+            if let Ok(stream) = TcpStream::connect(self.destination) {
+                self.stream = Some(stream);
+            }
+        }
     }
 }
 
 impl Write for Broadcast {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        self.send_packet(buf)?;
+        self.connect_if_none();
+
+        if let Some(stream) = self.stream.as_mut() {
+            if let Err(_) = stream.write_all(buf) {
+                self.stream = None;
+            }
+        }
+
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
+        if let Some(stream) = self.stream.as_mut() {
+            if let Err(_) = stream.flush() {
+                self.stream = None;
+            }
+        }
         Ok(())
     }
 }
