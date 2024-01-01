@@ -13,8 +13,13 @@ use winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
 mod terminal_app;
 pub use terminal_app::remote_terminal;
 
-#[cfg(target_os = "windows")]
 pub fn redirect_stdout_to_ip(ip: &'static str) -> std::io::Result<()> {
+    #[cfg(not(target_os = "windows"))]
+    return Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        "Redirecting stdout is currently only supported on Windows platforms",
+    ));
+
     let mut read_handle: RawHandle = ptr::null_mut();
     let mut write_handle: RawHandle = ptr::null_mut();
 
